@@ -1,0 +1,15 @@
+'use strict';
+const $=id=>document.getElementById(id);
+const days=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+const time=t=>{const [h,m]=t.split(':').map(Number);return `${h%12||12}:${String(m).padStart(2,'0')} ${h<12?'a.m.':'p.m.'}`;};
+function cvOperation(mode,id){return new Promise((resolve,reject)=>{const req=indexedDB.open('atr-application-preview',1);req.onupgradeneeded=()=>req.result.createObjectStore('cvs');req.onerror=()=>reject(req.error);req.onsuccess=()=>{const db=req.result,tx=db.transaction('cvs',mode==='get'?'readonly':'readwrite'),store=tx.objectStore('cvs');const r=mode==='get'?store.get(id):store.delete(id);let result;r.onsuccess=()=>result=r.result;tx.oncomplete=()=>{db.close();resolve(result);};tx.onerror=()=>{db.close();reject(tx.error);};};});}
+let fileURL=null;
+async function init(){let draft;try{draft=JSON.parse(sessionStorage.getItem('atr-radiologist-draft'));}catch{}if(!draft?.fields||draft.schedule?.length!==7){$('missing').hidden=false;return;}$('application-review').hidden=false;
+const add=(target,label,value)=>{const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=label;dd.textContent=value;$(target).append(dt,dd);};
+for(const [key,label]of [['fullName','First and Last Name'],['email','Email address'],['phone','Phone number']])add('contact-details',label,draft.fields[key]||'Not provided');
+add('schedule-details','Preferred reading schedule',draft.schedule.flatMap((s,i)=>s.selected?[`${days[i]}: ${time(s.start)} – ${time(s.end)}${s.end<s.start?' (next day)':''}\n${s.frequency==='weekly'?'Every week':s.frequency+' '+(s.frequency==='1'?'shift':'shifts')+' per month'}`]:[]).join('\n\n'));add('schedule-details','Time zone',draft.timezoneLabel);$('review-notes').textContent=draft.fields.notes||'No additional information.';
+const id=sessionStorage.getItem('atr-radiologist-cv-id');try{const file=id&&await cvOperation('get',id);if(!file)throw Error('missing');$('cv-summary').textContent=file.name+' · '+(file.size/1024/1024).toFixed(2)+' MB';fileURL=URL.createObjectURL(file);$('download-cv').href=fileURL;$('download-cv').download=file.name;$('download-cv').hidden=false;$('confirm-button').disabled=false;}catch{$('cv-summary').textContent='Your Resume is not available. Choose Edit answers and attach it again.';}
+$('confirm-form').addEventListener('submit',async e=>{e.preventDefault();$('confirm-button').disabled=true;try{await cvOperation('delete',id);sessionStorage.removeItem('atr-radiologist-cv-id');if(fileURL)URL.revokeObjectURL(fileURL);$('download-cv').hidden=true;$('cv-summary').textContent=draft.cv.name+' · Removed from browser storage after confirmation';$('confirm-form').hidden=true;$('confirmed').hidden=false;$('confirmed').focus();}catch{$('cv-summary').textContent='Could not clear the saved Resume. Please try confirming again.';$('confirm-button').disabled=false;}});
+}
+window.addEventListener('pagehide',()=>{if(fileURL)URL.revokeObjectURL(fileURL);});
+init();
