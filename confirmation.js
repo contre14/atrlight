@@ -12,5 +12,6 @@ add('schedule-details','Requested coverage',draft.schedule.flatMap((s,i)=>s.sele
 add('schedule-details','Time zone',draft.timezoneLabel);
 add('schedule-details','Average daily cases',draft.unsure?'Not sure yet':draft.cases+' cases during requested coverage hours');
 $('review-notes').textContent=draft.fields.notes||'No additional notes.';
-$('confirm-form').addEventListener('submit',e=>{e.preventDefault();$('confirm-form').hidden=true;$('confirmed').hidden=false;$('confirmed').focus();});
+const completed=ATRSubmission.completed('hospital',draft);if(completed)ATRSubmission.showReceipt(completed);
+$('confirm-form').addEventListener('submit',async e=>{e.preventDefault();const button=e.submitter||$('confirm-form').querySelector('button');button.disabled=true;button.textContent='Submitting…';try{const receipt=await ATRSubmission.submit('hospital',draft);ATRSubmission.showReceipt(receipt);}catch(error){ATRSubmission.showError(error.message);button.disabled=false;button.textContent='Submit request →';}});
 }
