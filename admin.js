@@ -2,7 +2,8 @@
 const endpoint='https://bxaachlardxdofkmfruu.supabase.co/functions/v1/atr-staff';
 const key='sb_publishable_Eg1TVPfyRzdkXWcI_CXg2Q_gw6n_CWA';
 const $=id=>document.getElementById(id), storageKey='atr-staff-session';
-let session=null,kind='hospital',offset=0,search='',version=0,detailVersion=0,expiryTimer;
+const route=new URLSearchParams(location.search);
+let session=null,kind=route.get('kind')==='radiologist'?'radiologist':'hospital',offset=0,search='',version=0,detailVersion=0,expiryTimer;
 const days=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
 function el(tag,text,cls){const node=document.createElement(tag);if(text!==undefined)node.textContent=text;if(cls)node.className=cls;return node;}
 function showMessage(id,text,error=false){$(id).textContent=text;$(id).classList.toggle('error',error);}
@@ -23,7 +24,10 @@ function timeText(value){return new Date('2000-01-01T'+value).toLocaleTimeString
 function activate(){
   if(!session?.access_token||session.expires_at<=Date.now()){clearSession();return;}
   $('signin').hidden=true;$('dashboard').hidden=false;$('signed-in-email').textContent=session.email;
-  clearTimeout(expiryTimer);expiryTimer=setTimeout(()=>clearSession('Your session has ended. Please sign in again.'),session.expires_at-Date.now());loadList();
+  clearTimeout(expiryTimer);expiryTimer=setTimeout(()=>clearSession('Your session has ended. Please sign in again.'),session.expires_at-Date.now());
+  document.querySelector('[data-kind="'+kind+'"]').click();
+  const applicationId=route.get('application');
+  if(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(applicationId||''))openDetail(applicationId);
 }
 async function busy(form,fn){const buttons=[...form.querySelectorAll('button')];buttons.forEach(b=>b.disabled=true);try{await fn();}finally{buttons.forEach(b=>b.disabled=false);}}
 $('email-form').addEventListener('submit',event=>{event.preventDefault();busy(event.currentTarget,async()=>{
@@ -83,7 +87,7 @@ async function openDetail(id){
     for(const shift of shifts){const row=el('li');row.append(el('strong',days[shift.day_of_week]));const description=el('span',shift.all_day?'24-hour coverage':timeText(shift.start_time)+' – '+timeText(shift.end_time)+(shift.end_time<shift.start_time?' (next day)':''));if(shift.frequency)description.append(el('small',shift.frequency==='weekly'?'Every week':shift.frequency+' time'+(shift.frequency==='1'?'':'s')+' per month'));row.append(description);list.append(row);}schedule.append(list);
     if(s.kind==='hospital'){const volume=el('dl',undefined,'fields');field(volume,'Estimated average daily cases',a.volume_unsure?'Not sure yet':a.daily_cases);schedule.append(el('br'),volume);}body.append(schedule);
     if(s.kind==='radiologist'){
-      const resume=section('Resume'),box=el('div',undefined,'resume-box'),label=el('p',a.resume_original_name);label.append(el('small',(a.resume_size/1024).toFixed(0)+' KB · Private file'));
+      const resume=section('Resume'),box=el('div',undefined,'resume-box'),label=el('p',a.resume_original_name);label.append(el('small',Math.max(1,Math.ceil(a.resume_size/1024))+' KB · Private file'));
       const button=el('button','Download resume ↓','primary'),status=el('p');status.setAttribute('role','status');
       button.addEventListener('click',async()=>{button.disabled=true;status.textContent='Preparing download…';try{const blob=await request({action:'resume',id},true);if(!session)return;const url=URL.createObjectURL(blob),link=el('a');link.href=url;link.download=a.resume_original_name;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),10000);status.textContent='Download started.';}catch(error){status.textContent=error.message;}finally{button.disabled=false;}});
       box.append(label,button);resume.append(box,status);body.append(resume);
